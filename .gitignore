@@ -1,0 +1,24 @@
+# Ignore les fichiers Node.js et les dépendances
+node_modules/
+
+# Ignorer les fichiers de log
+*.log
+
+# Ignorer le fichier .env (contenant des informations sensibles)
+.env
+
+# Ignorer les fichiers système comme ceux générés par l'éditeur
+.DS_Store   # Mac
+Thumbs.db   # Windows
+
+# Ignorer les répertoires de tests ou de couverture
+coverage/
+
+# Ignorer les fichiers de configuration IDE ou éditeur
+.vscode/
+.idea/
+
+# Ignorer les fichiers compilés (si nécessaire)
+*.js.map
+backend/
+frontend/

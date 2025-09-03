@@ -20,5 +20,4 @@ coverage/
 
 # Ignorer les fichiers compilés (si nécessaire)
 *.js.map
-backend/
-frontend/
+

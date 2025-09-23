@@ -1,11 +1,5 @@
-import React, { useState } from "react";
-import {
-  Box,
-  Button,
-  Paper,
-  TextField,
-  Typography,
-} from "@mui/material";
+import React, { useState, useEffect } from "react";
+import { Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
@@ -15,6 +9,16 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
+  // 🔹 Redirection si déjà connecté
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+    if (token) {
+      if (role === "candidat") navigate("/candidat/profile");
+      else if (role === "employeur") navigate("/employeur/profile");
+    }
+  }, [navigate]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -23,40 +27,63 @@ export default function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await response.json();
 
-      if (response.ok) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("role", data.role);
-
-        if (data.role === "candidat") navigate("/candidat");
-        else if (data.role === "employeur") navigate("/employeur");
-      } else {
+      if (!response.ok) {
         alert(data.message || "❌ Identifiants incorrects");
+        return;
       }
-    } catch (error) {
+
+      console.log("Token reçu :", data.token, "Role :", data.role);
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.role);
+
+      if (data.role === "employeur") navigate("/employeur/profile");
+      else if (data.role === "candidat") navigate("/candidat/profile");
+    } catch (err) {
       alert("❌ Erreur réseau");
     }
   };
 
   return (
     <Box sx={{ position: "relative", minHeight: "100vh" }}>
-      {/* Carrousel */}
-      <Carousel autoPlay infiniteLoop showThumbs={false} showStatus={false} interval={4000} transitionTime={1200} swipeable emulateTouch stopOnHover={false} dynamicHeight={false}>
-  <div>
-    <img src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d" alt="Job meeting" style={{ height: "100vh", objectFit: "cover" }} />
-  </div>
-  <div>
-    <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c" alt="Business team" style={{ height: "100vh", objectFit: "cover" }} />
-  </div>
-  <div>
-    <img src="https://images.unsplash.com/photo-1556761175-4b46a572b786" alt="Career" style={{ height: "100vh", objectFit: "cover" }} />
-  </div>
-</Carousel>
+      {/* 🔹 Carousel */}
+      <Carousel
+        autoPlay
+        infiniteLoop
+        showThumbs={false}
+        showStatus={false}
+        interval={4000}
+        transitionTime={1200}
+        swipeable
+        emulateTouch
+        stopOnHover={false}
+        dynamicHeight={false}
+      >
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d"
+            alt="Job meeting"
+            style={{ height: "100vh", objectFit: "cover" }}
+          />
+        </div>
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1522071820081-009f0129c71c"
+            alt="Business team"
+            style={{ height: "100vh", objectFit: "cover" }}
+          />
+        </div>
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1556761175-4b46a572b786"
+            alt="Career"
+            style={{ height: "100vh", objectFit: "cover" }}
+          />
+        </div>
+      </Carousel>
 
-
-      {/* Formulaire */}
+      {/* 🔹 Formulaire */}
       <Box
         display="flex"
         justifyContent="center"
@@ -80,7 +107,12 @@ export default function Login() {
             color: "white",
           }}
         >
-          <Typography variant="h4" mb={3} textAlign="center" fontWeight="bold">
+          <Typography
+            variant="h4"
+            mb={3}
+            textAlign="center"
+            fontWeight="bold"
+          >
             Connexion
           </Typography>
 
@@ -123,7 +155,11 @@ export default function Login() {
 
             <Typography mt={2} textAlign="center" sx={{ color: "white" }}>
               Pas encore de compte ?{" "}
-              <Button variant="text" onClick={() => navigate("/register")} sx={{ color: "#00AEEF", textTransform: "none" }}>
+              <Button
+                variant="text"
+                onClick={() => navigate("/register")}
+                sx={{ color: "#00AEEF", textTransform: "none" }}
+              >
                 S'inscrire
               </Button>
             </Typography>

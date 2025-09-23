@@ -1,28 +1,25 @@
 const jwt = require("jsonwebtoken");
 
-// Middleware pour authentification JWT
-function auth(req, res, next) {
-  const token = req.header("Authorization"); // expects "Bearer <token>"
+// Middleware pour vérifier que c'est un employeur
+function authenticateEmployer(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(401).json({ message: "❌ Token manquant" });
 
-  if (!token) {
-    return res.status(401).json({ message: "⛔ Access denied. No token provided." });
-  }
+  const token = authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "❌ Token invalide" });
 
   try {
-    const decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET || "secretKey123");
-    req.user = decoded; // stocke les infos de l'utilisateur
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secretKey123");
+
+    if (decoded.role !== "employeur") {
+      return res.status(403).json({ message: "❌ Accès refusé : employeur requis" });
+    }
+
+    req.user = decoded; // { id: X, role: "employeur" }
     next();
-  } catch (err) {
-    res.status(400).json({ message: "❌ Invalid token." });
+  } catch (error) {
+    return res.status(401).json({ message: "❌ Token invalide ou expiré" });
   }
 }
 
-// Middleware pour routes accessibles seulement aux employeurs
-function employeurOnly(req, res, next) {
-  if (!req.user) return res.status(401).json({ message: "⛔ Non authentifié" });
-  if (req.user.role !== "employeur") return res.status(403).json({ message: "⛔ Accès réservé aux employeurs" });
-  next();
-}
-
-module.exports = { auth, employeurOnly };
-
+module.exports = { authenticateEmployer };

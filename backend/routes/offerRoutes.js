@@ -1,20 +1,28 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middlewares/auth");
-const db = require("../config/db"); // connexion MySQL
+const pool = require("../config/db");
+const { authenticateEmployer } = require("../middleware/auth");
 
-// 📌 Récupérer toutes les offres de l'employeur connecté
-router.get("/", auth.employeurOnly, (req, res) => {
-  const employeurId = req.user.id;
+// Publier une offre
+router.post("/", authenticateEmployer, async (req, res) => {
+  const { title, description, location, contract_type } = req.body;
+  
+  if (!title || !description || !location || !contract_type) {
+    return res.status(400).json({ message: "❌ Tous les champs sont obligatoires" });
+  }
 
-  db.query(
-    "SELECT id, title, description, created_at FROM offers WHERE employeur_id = ?",
-    [employeurId],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err });
-      res.json(results);
-    }
-  );
+  try {
+    const employer_id = req.user.id; // <-- récupéré depuis le token
+    const [result] = await pool.query(
+      "INSERT INTO job_offers (title, description, location, contract_type, employer_id) VALUES (?, ?, ?, ?, ?)",
+      [title, description, location, contract_type, employer_id]
+    );
+
+    res.status(201).json({ offerId: result.insertId, message: "✅ Offre publiée avec succès" });
+  } catch (error) {
+    console.error("Erreur SQL :", error);
+    res.status(500).json({ message: "❌ Erreur serveur lors de la publication" });
+  }
 });
 
 module.exports = router;

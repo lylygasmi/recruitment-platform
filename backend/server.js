@@ -1,24 +1,29 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+// server.js
+const express = require("express");
+const cors = require("cors");
+const pool = require("./config/db"); // Chemin correct vers db.js
 
-// Import des routes
-const employerRoutes = require('./routes/employerRoutes');
-const authRoutes = require('./routes/auth');
+const offerRoutes = require("./routes/offerRoutes");
+const authRoutes = require("./routes/authRoutes");
+
+require("dotenv").config(); // Pour JWT_SECRET
 
 const app = express();
-
-// Middlewares
-app.use(cors()); // autorise frontend localhost:3000 à appeler backend
-app.use(bodyParser.json());
+app.use(cors());
+app.use(express.json());
 
 // Routes
-app.use('/api/employers', employerRoutes);
-app.use('/api/auth', authRoutes); // <-- important pour register/login
+app.use("/api/offres", offerRoutes);
+app.use("/api/auth", authRoutes);
 
-// Lancer le serveur
-const PORT = 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Test connexion MySQL
+pool.getConnection((err, connection) => {
+  if (err) console.error("❌ Erreur de connexion à MySQL :", err);
+  else {
+    console.log("✅ Connecté à la base MySQL");
+    connection.release();
+  }
+});
 
-
-
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`));

@@ -1,13 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { Box, Button, Paper, TextField, Typography } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
+import axios from "axios";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // 🔹 Auto-login depuis lien de confirmation (optionnel)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const autoLogin = params.get("autologin");
+    const token = params.get("token");
+
+    if (autoLogin && token) {
+      localStorage.setItem("token", token);
+
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      localStorage.setItem("role", payload.role);
+
+      if (payload.role === "candidat") navigate("/candidat/profile");
+      else if (payload.role === "employeur") navigate("/employeur/profile");
+    }
+  }, [location, navigate]);
 
   // 🔹 Redirection si déjà connecté
   useEffect(() => {
@@ -21,33 +41,31 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
+
     try {
-      const response = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await response.json();
+      const response = await axios.post("http://localhost:5000/api/auth/login", { email, password });
+      const data = response.data;
 
-      if (!response.ok) {
-        alert(data.message || "❌ Identifiants incorrects");
-        return;
-      }
-
-      console.log("Token reçu :", data.token, "Role :", data.role);
+      // Sauvegarder token et rôle
       localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
+      localStorage.setItem("role", data.user.role);
 
-      if (data.role === "employeur") navigate("/employeur/profile");
-      else if (data.role === "candidat") navigate("/candidat/profile");
+      // Redirection selon le rôle
+      if (data.user.role === "employeur") navigate("/employeur/profile");
+      else if (data.user.role === "candidat") navigate("/candidat/profile");
     } catch (err) {
-      alert("❌ Erreur réseau");
+      if (err.response?.status === 403) {
+        setError("⚠️ Compte non vérifié. Vérifiez vos emails pour activer votre compte.");
+      } else {
+        setError(err.response?.data?.message || "Erreur réseau");
+      }
     }
   };
 
   return (
     <Box sx={{ position: "relative", minHeight: "100vh" }}>
-      {/* 🔹 Carousel */}
+      {/* Carousel */}
       <Carousel
         autoPlay
         infiniteLoop
@@ -83,18 +101,12 @@ export default function Login() {
         </div>
       </Carousel>
 
-      {/* 🔹 Formulaire */}
+      {/* Formulaire */}
       <Box
         display="flex"
         justifyContent="center"
         alignItems="center"
-        sx={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-        }}
+        sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
       >
         <Paper
           elevation={6}
@@ -107,14 +119,11 @@ export default function Login() {
             color: "white",
           }}
         >
-          <Typography
-            variant="h4"
-            mb={3}
-            textAlign="center"
-            fontWeight="bold"
-          >
+          <Typography variant="h4" mb={3} textAlign="center" fontWeight="bold">
             Connexion
           </Typography>
+
+          {error && <Typography color="error" textAlign="center">{error}</Typography>}
 
           <form onSubmit={handleLogin}>
             <TextField
@@ -139,6 +148,7 @@ export default function Login() {
               InputLabelProps={{ style: { color: "white" } }}
               InputProps={{ style: { color: "white" } }}
             />
+
             <Button
               type="submit"
               variant="contained"

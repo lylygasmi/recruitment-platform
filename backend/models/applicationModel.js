@@ -1,46 +1,44 @@
-const db = require("../config/db");
+const pool = require("../config/db");
 
 const Application = {
   // Créer une candidature
-  create: ({ candidate_id, job_offer_id, cv_filename }) =>
-    db.promise().execute(
-      "INSERT INTO applications (candidate_id, job_offer_id, cv_filename) VALUES (?, ?, ?)",
-      [candidate_id, job_offer_id, cv_filename]
-    ),
+  create: async ({ candidate_id, offer_id }) => {
+    return pool.query(
+      "INSERT INTO candidatures (candidate_id, offer_id, date_posted, status) VALUES (?, ?, NOW(), 'en_attente')",
+      [candidate_id, offer_id]
+    );
+  },
 
-  // Récupérer toutes les candidatures d’un candidat
-  getByCandidate: (candidate_id) =>
-    db.promise().execute(
-      "SELECT a.*, j.title AS job_title, j.company AS job_company " +
-      "FROM applications a " +
-      "JOIN job_offers j ON a.job_offer_id = j.id " +
-      "WHERE a.candidate_id = ? ORDER BY a.created_at DESC",
+  // Récupérer les candidatures d'un candidat
+  getByCandidate: async (candidate_id) => {
+    return pool.query(
+      `SELECT c.id, c.status, c.date_posted,
+              o.title AS offer_title, o.description AS offer_description, o.location
+       FROM candidatures c
+       JOIN job_offers o ON c.offer_id = o.id
+       WHERE c.candidate_id = ?
+       ORDER BY c.date_posted DESC`,
       [candidate_id]
-    ),
+    );
+  },
 
-  // Récupérer toutes les candidatures pour une offre (employeur)
-  getByOffer: (job_offer_id) =>
-    db.promise().execute(
-      "SELECT a.*, u.name AS candidate_name, u.email AS candidate_email " +
-      "FROM applications a " +
-      "JOIN users u ON a.candidate_id = u.id " +
-      "WHERE a.job_offer_id = ? ORDER BY a.created_at DESC",
-      [job_offer_id]
-    ),
+  // Récupérer les candidatures pour une offre
+  getByOffer: async (offer_id) => {
+    return pool.query(
+      `SELECT c.id, c.status, c.date_posted,
+              u.name AS candidate_name, u.email AS candidate_email
+       FROM candidatures c
+       JOIN users u ON c.candidate_id = u.id
+       WHERE c.offer_id = ?
+       ORDER BY c.date_posted DESC`,
+      [offer_id]
+    );
+  },
 
-  // Mettre à jour le statut d’une candidature
-  updateStatus: (id, status) =>
-    db.promise().execute(
-      "UPDATE applications SET status = ? WHERE id = ?",
-      [status, id]
-    ),
-
-  // Supprimer une candidature par son propriétaire (candidat)
-  delete: (id, candidate_id) =>
-    db.promise().execute(
-      "DELETE FROM applications WHERE id = ? AND candidate_id = ?",
-      [id, candidate_id]
-    ),
+  // Mettre à jour le statut d'une candidature
+  updateStatus: async (id, status) => {
+    return pool.query("UPDATE candidatures SET status = ? WHERE id = ?", [status, id]);
+  },
 };
 
 module.exports = Application;

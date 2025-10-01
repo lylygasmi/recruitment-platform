@@ -1,29 +1,33 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
-const pool = require("./config/db"); // Chemin correct vers db.js
+const bodyParser = require("body-parser");
+const fileUpload = require("express-fileupload");
+require("dotenv").config();
 
-const offerRoutes = require("./routes/offerRoutes");
-const authRoutes = require("./routes/authRoutes");
-
-require("dotenv").config(); // Pour JWT_SECRET
-
-const app = express();
+const app = express(); // créer une seule fois l'app
+const path = require("path");
+// ------------------ Middlewares ------------------ //
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(fileUpload());
+// rendre le dossier uploads accessible publiquement
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// ------------------ Routes ------------------ //
+const authRoutes = require("./routes/authRoutes");
+const offerRoutes = require("./routes/offerRoutes");
+const candidatureRoutes = require("./routes/candidatureRoutes");
+const employerRoutes = require("./routes/employerRoutes");
+const cvRoutes = require("./routes/cvRoutes"); // si tu as ajouté les CVs
 
-// Routes
-app.use("/api/offres", offerRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/offres", offerRoutes);
+app.use("/api/candidatures", candidatureRoutes);
+app.use("/api/employer", employerRoutes);
+app.use("/api/cvs", cvRoutes);
 
-// Test connexion MySQL
-pool.getConnection((err, connection) => {
-  if (err) console.error("❌ Erreur de connexion à MySQL :", err);
-  else {
-    console.log("✅ Connecté à la base MySQL");
-    connection.release();
-  }
-});
-
+// ------------------ Démarrage serveur ------------------ //
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
+});

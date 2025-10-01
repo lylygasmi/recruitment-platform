@@ -1,13 +1,14 @@
-const db = require('../config/db');
+const db = require("../config/db");
 
 const Candidate = {
-  create: (data, callback) => {
-    const sql = 'INSERT INTO candidates SET ?';
-    db.query(sql, data, callback);
+  getById: (id) => {
+    const sql = "SELECT id, name, email, role FROM users WHERE id = ?";
+    return db.promise().execute(sql, [id]);
   },
-  getAll: (callback) => {
-    const sql = 'SELECT * FROM candidates';
-    db.query(sql, callback);
+
+  update: (id, { name, email, password }) => {
+    const sql = "UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?";
+    return db.promise().execute(sql, [name, email, password, id]);
   }
 };
 

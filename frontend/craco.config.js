@@ -1,14 +1,26 @@
-const webpack = require('webpack');
+const webpack = require("webpack");
 
 module.exports = {
-    webpack: {
-      configure: (webpackConfig) => {
-        webpackConfig.resolve.fallback = {
-          assert: require.resolve('assert/'),
-          // tu peux ajouter d'autres polyfills si besoin ici
-        };
-        return webpackConfig;
-      },
+  webpack: {
+    configure: (config) => {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        process: require.resolve("process/browser.js"),
+        buffer: require.resolve("buffer/"),
+        util: require.resolve("util/"),
+        assert: require.resolve("assert/"),
+        stream: require.resolve("stream-browserify"),
+        path: require.resolve("path-browserify"),
+      };
+
+      config.plugins.push(
+        new webpack.ProvidePlugin({
+          process: "process/browser.js",
+          Buffer: ["buffer", "Buffer"],
+        })
+      );
+
+      return config;
     },
-  };
-  
+  },
+};

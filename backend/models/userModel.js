@@ -1,28 +1,19 @@
-const db = require("../db");
+const db = require("../config/db");
 
 const User = {
-  // Créer un utilisateur
-  create: ({ name, email, password, role }, callback) => {
+  create: ({ name, email, password, role }) => {
     const sql = "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)";
-    db.query(sql, [name, email, password, role], callback);
+    return db.promise().execute(sql, [name, email, password, role]);
   },
 
-  // Chercher un utilisateur par email
-  findByEmail: (email, callback) => {
+  findByEmail: (email) => {
     const sql = "SELECT * FROM users WHERE email = ?";
-    db.query(sql, [email], callback);
+    return db.promise().execute(sql, [email]);
   },
 
-  // Optionnel : récupérer un utilisateur par ID
-  findById: (id, callback) => {
+  getById: (id) => {
     const sql = "SELECT * FROM users WHERE id = ?";
-    db.query(sql, [id], callback);
-  },
-
-  // Optionnel : récupérer tous les utilisateurs
-  getAll: (callback) => {
-    const sql = "SELECT id, name, email, role FROM users";
-    db.query(sql, callback);
+    return db.promise().execute(sql, [id]);
   },
 };
 

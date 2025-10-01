@@ -1,43 +1,30 @@
 const express = require("express");
 const router = express.Router();
-const pool = require("../config/db");
-const { auth, employeurOnly } = require("../middleware/auth");
 
-// Récupérer les offres publiées par cet employeur
-router.get("/mes-offres", auth, employeurOnly, async (req, res) => {
-  try {
-    const employer_id = req.user.id;
-    const [rows] = await pool.query(
-      "SELECT * FROM job_offers WHERE employer_id = ? ORDER BY created_at DESC",
-      [employer_id]
-    );
-    res.json(rows);
-  } catch (error) {
-    console.error("❌ Erreur MySQL :", error);
-    res.status(500).json({ message: "❌ Erreur serveur" });
-  }
-});
+const {
+  createJobOffer,
+  getMyJobOffers,
+  updateJobOffer,
+  deleteJobOffer,
+} = require("../controllers/offerController");
 
-// Supprimer une offre (optionnel)
-router.delete("/offre/:id", auth, employeurOnly, async (req, res) => {
-  try {
-    const employer_id = req.user.id;
-    const offer_id = req.params.id;
+const { getApplicationsByOffer } = require("../controllers/applicationController");
 
-    const [result] = await pool.query(
-      "DELETE FROM job_offers WHERE id = ? AND employer_id = ?",
-      [offer_id, employer_id]
-    );
+const authenticateEmployer = require("../middleware/authenticateEmployer");
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "⚠ Offre non trouvée ou non autorisée" });
-    }
+// ✅ Publier une offre
+router.post("/offres", authenticateEmployer, createJobOffer);
 
-    res.json({ message: "✅ Offre supprimée avec succès" });
-  } catch (error) {
-    console.error("❌ Erreur MySQL :", error);
-    res.status(500).json({ message: "❌ Erreur serveur" });
-  }
-});
+// ✅ Voir mes offres
+router.get("/offres/mes-offres", authenticateEmployer, getMyJobOffers);
+
+// ✅ Modifier une offre
+router.patch("/offres/:id", authenticateEmployer, updateJobOffer);
+
+// ✅ Supprimer une offre
+router.delete("/offres/:id", authenticateEmployer, deleteJobOffer);
+
+// ✅ Voir candidatures reçues pour une offre
+router.get("/offres/:job_offer_id/candidatures", authenticateEmployer, getApplicationsByOffer);
 
 module.exports = router;

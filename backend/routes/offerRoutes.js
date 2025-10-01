@@ -1,28 +1,28 @@
 const express = require("express");
 const router = express.Router();
-const pool = require("../config/db");
-const { authenticateEmployer } = require("../middleware/auth");
+const {
+  createJobOffer,
+  getAllJobOffers,
+  getMyJobOffers,
+  updateJobOffer,
+  deleteJobOffer,
+} = require("../controllers/offerController");
 
-// Publier une offre
-router.post("/", authenticateEmployer, async (req, res) => {
-  const { title, description, location, contract_type } = req.body;
-  
-  if (!title || !description || !location || !contract_type) {
-    return res.status(400).json({ message: "❌ Tous les champs sont obligatoires" });
-  }
+const authenticateEmployer = require("../middleware/authenticateEmployer");
 
-  try {
-    const employer_id = req.user.id; // <-- récupéré depuis le token
-    const [result] = await pool.query(
-      "INSERT INTO job_offers (title, description, location, contract_type, employer_id) VALUES (?, ?, ?, ?, ?)",
-      [title, description, location, contract_type, employer_id]
-    );
+// ✅ Voir toutes les offres (public : candidats + employeurs)
+router.get("/", getAllJobOffers);
 
-    res.status(201).json({ offerId: result.insertId, message: "✅ Offre publiée avec succès" });
-  } catch (error) {
-    console.error("Erreur SQL :", error);
-    res.status(500).json({ message: "❌ Erreur serveur lors de la publication" });
-  }
-});
+// ✅ Publier une offre (employeur uniquement)
+router.post("/", authenticateEmployer, createJobOffer);
+
+// ✅ Voir mes offres (employeur connecté)
+router.get("/mes-offres", authenticateEmployer, getMyJobOffers);
+
+// ✅ Modifier une offre (employeur)
+router.patch("/:id", authenticateEmployer, updateJobOffer);
+
+// ✅ Supprimer une offre (employeur)
+router.delete("/:id", authenticateEmployer, deleteJobOffer);
 
 module.exports = router;

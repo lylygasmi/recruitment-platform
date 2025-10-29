@@ -1,75 +1,76 @@
-const pool = require("../config/db");
+const JobOffer = require("../models/jobOfferModel");
 
-// ✅ Publier une offre
-exports.createJobOffer = async (req, res) => {
+// Créer une offre (employeur)
+exports.createOffer = async (req, res) => {
   try {
-    const { title, description, location, contract_type, salary } = req.body;
-
-    if (!req.user || req.user.role !== "employeur") {
-      return res.status(403).json({ message: "Accès refusé." });
-    }
-
-    const [result] = await pool.query(
-      "INSERT INTO job_offers (employer_id, title, description, location, contract_type, salary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())",
-      [req.user.id, title, description, location, contract_type, salary]
-    );
-
-    res.status(201).json({ message: "✅ Offre publiée avec succès", id: result.insertId });
+    const employer_id = req.user?.id;
+    const { title, description, location, contract_type, specialite, salary } = req.body;
+    if (!employer_id) return res.status(401).json({ message: "❌ Employeur non authentifié" });
+    await JobOffer.create({ employer_id, title, description, location, contract_type, specialite, salary });
+    res.status(201).json({ message: "✅ Offre créée avec succès" });
   } catch (err) {
-    console.error("❌ Erreur createJobOffer:", err);
+    console.error("Erreur création offre :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ✅ Voir toutes les offres
-exports.getAllJobOffers = async (req, res) => {
+// Voir toutes les offres d’un employeur
+exports.getEmployerOffers = async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM job_offers ORDER BY created_at DESC");
+    const employer_id = req.user?.id;
+    const [rows] = await JobOffer.getByEmployer(employer_id);
     res.json(rows);
   } catch (err) {
-    console.error("❌ Erreur getAllJobOffers:", err);
+    console.error("Erreur getEmployerOffers :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ✅ Voir mes offres (employeur)
-exports.getMyJobOffers = async (req, res) => {
+// Voir toutes les offres disponibles pour un candidat
+exports.getAllOffers = async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM job_offers WHERE employer_id = ?", [req.user.id]);
+    const [rows] = await JobOffer.getAll();
     res.json(rows);
   } catch (err) {
-    console.error("❌ Erreur getMyJobOffers:", err);
+    console.error("Erreur getAllOffers :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ✅ Modifier une offre
-exports.updateJobOffer = async (req, res) => {
+// Mettre à jour une offre
+exports.updateOffer = async (req, res) => {
   try {
-    const { title, description, location, contract_type, salary } = req.body;
-    const offerId = req.params.id;
-
-    await pool.query(
-      "UPDATE job_offers SET title=?, description=?, location=?, contract_type=?, salary=?, updated_at=NOW() WHERE id=? AND employer_id=?",
-      [title, description, location, contract_type, salary, offerId, req.user.id]
-    );
-
-    res.json({ message: "✅ Offre mise à jour" });
+    const { id } = req.params;
+    const data = req.body;
+    await JobOffer.update(id, data);
+    res.json({ message: "✅ Offre mise à jour avec succès" });
   } catch (err) {
-    console.error("❌ Erreur updateJobOffer:", err);
+    console.error("Erreur updateOffer :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ✅ Supprimer une offre
-exports.deleteJobOffer = async (req, res) => {
+// Supprimer une offre
+exports.deleteOffer = async (req, res) => {
   try {
-    const offerId = req.params.id;
-    await pool.query("DELETE FROM job_offers WHERE id=? AND employer_id=?", [offerId, req.user.id]);
-
-    res.json({ message: "🗑️ Offre supprimée" });
+    const { id } = req.params;
+    await JobOffer.delete(id);
+    res.json({ message: "✅ Offre supprimée avec succès" });
   } catch (err) {
-    console.error("❌ Erreur deleteJobOffer:", err);
+    console.error("Erreur deleteOffer :", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// Voir une offre par ID
+exports.getOfferById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await JobOffer.getById(id);
+    if (!rows.length) return res.status(404).json({ message: "Offre introuvable" });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("Erreur getOfferById :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

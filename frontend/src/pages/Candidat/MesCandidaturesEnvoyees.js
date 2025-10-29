@@ -1,63 +1,48 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-} from "@mui/material";
+import { Box, Typography, Card, CardContent } from "@mui/material";
 
 export default function MesCandidaturesEnvoyees() {
   const [candidatures, setCandidatures] = useState([]);
   const token = localStorage.getItem("token");
 
-  // 🔹 Charger mes candidatures
   useEffect(() => {
     const fetchCandidatures = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/candidatures/mes-candidatures", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.get(
+          "http://localhost:5000/api/candidatures/mes-candidatures",
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        console.log("💡 [DEBUG] Candidatures reçues côté frontend:", res.data);
         setCandidatures(res.data);
       } catch (err) {
-        console.error("Erreur fetch candidatures:", err);
+        console.error("💥 Erreur fetch candidatures candidat:", err);
       }
     };
+
     if (token) fetchCandidatures();
   }, [token]);
 
   return (
     <Box p={3}>
       <Typography variant="h4" mb={3}>
-        📑 Mes Candidatures
+        📩 Mes candidatures envoyées
       </Typography>
 
       {candidatures.length === 0 ? (
-        <Typography>Aucune candidature envoyée.</Typography>
+        <Typography>Aucune candidature disponible.</Typography>
       ) : (
         candidatures.map((c) => (
           <Card key={c.id} sx={{ mb: 2, p: 2 }}>
             <CardContent>
-              <Typography variant="h6">{c.title}</Typography>
-              <Typography>📍 {c.location}</Typography>
-              <Typography>📝 {c.contract_type}</Typography>
+              <Typography>Offre : {c.offer_title}</Typography>
+              <Typography>Status : {c.status}</Typography>
               <Typography>
-                ⏳ Statut :{" "}
-                <b
-                  style={{
-                    color:
-                      c.status === "acceptée"
-                        ? "green"
-                        : c.status === "refusée"
-                        ? "red"
-                        : "orange",
-                  }}
-                >
-                  {c.status}
-                </b>
-              </Typography>
-              <Typography>
-                📅 Envoyée le : {new Date(c.date_posted).toLocaleDateString()}
+                Envoyée le :{" "}
+                {c.date_posted
+                  ? new Date(c.date_posted).toLocaleDateString()
+                  : "Non spécifiée"}
               </Typography>
             </CardContent>
           </Card>

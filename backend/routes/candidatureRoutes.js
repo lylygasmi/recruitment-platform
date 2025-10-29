@@ -1,25 +1,60 @@
+// backend/routes/candidatureRoutes.js
 const express = require("express");
 const router = express.Router();
-const {
-  createCandidature,
-  getMyCandidatures,
-  getCandidaturesByOffer,
-  updateCandidatureStatus,
-} = require("../controllers/candidatureController");
+const multer = require("multer");
+const path = require("path");
 
-const authenticateCandidat = require("../middleware/authenticateCandidat");
-const authenticateEmployer = require("../middleware/authenticateEmployer");
+const applicationController = require("../controllers/applicationController");
+const authenticateCandidate = require("../middleware/authenticateCandidat");
+const authenticateEmployeur = require("../middleware/authenticateEmployer");
 
-// ✅ Postuler à une offre (candidat uniquement)
-router.post("/", authenticateCandidat, createCandidature);
+// --- Configuration Multer pour upload CV ---
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/cv"),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
 
-// ✅ Voir mes candidatures envoyées (candidat)
-router.get("/mes-candidatures", authenticateCandidat, getMyCandidatures);
+// --- Routes Candidat ---
+router.post(
+  "/postuler-cv",
+  authenticateCandidate,
+  upload.single("cv"),
+  applicationController.createApplication
+);
 
-// ✅ Voir candidatures reçues pour une offre (employeur)
-router.get("/:offer_id", authenticateEmployer, getCandidaturesByOffer);
+router.get(
+  "/mes-candidatures",
+  authenticateCandidate,
+  applicationController.getMyApplications
+);
 
-// ✅ Accepter / Refuser une candidature (employeur)
-router.patch("/:id", authenticateEmployer, updateCandidatureStatus);
+router.delete(
+  "/candidature/:id",
+  authenticateCandidate,
+  applicationController.deleteApplication
+);
+
+// --- Routes Employeur ---
+router.get(
+  "/candidatures/offre/:job_offer_id",
+  authenticateEmployeur,
+  applicationController.getApplicationsByOffer
+);
+
+router.get(
+  "/candidatures/employeur",
+  authenticateEmployeur,
+  applicationController.getApplicationsByEmployer
+);
+
+router.put(
+  "/:id/status",
+  authenticateEmployeur,
+  applicationController.updateApplicationStatus
+);
 
 module.exports = router;

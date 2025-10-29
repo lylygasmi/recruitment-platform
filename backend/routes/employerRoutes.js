@@ -1,30 +1,10 @@
+// backend/routes/employerRoutes.js
 const express = require("express");
 const router = express.Router();
+const authenticateToken = require("../middleware/authenticateEmployer");
+const candidatureController = require("../controllers/candidatureController");
 
-const {
-  createJobOffer,
-  getMyJobOffers,
-  updateJobOffer,
-  deleteJobOffer,
-} = require("../controllers/offerController");
-
-const { getApplicationsByOffer } = require("../controllers/applicationController");
-
-const authenticateEmployer = require("../middleware/authenticateEmployer");
-
-// ✅ Publier une offre
-router.post("/offres", authenticateEmployer, createJobOffer);
-
-// ✅ Voir mes offres
-router.get("/offres/mes-offres", authenticateEmployer, getMyJobOffers);
-
-// ✅ Modifier une offre
-router.patch("/offres/:id", authenticateEmployer, updateJobOffer);
-
-// ✅ Supprimer une offre
-router.delete("/offres/:id", authenticateEmployer, deleteJobOffer);
-
-// ✅ Voir candidatures reçues pour une offre
-router.get("/offres/:job_offer_id/candidatures", authenticateEmployer, getApplicationsByOffer);
+// 🔹 Voir toutes les candidatures reçues pour mes offres
+router.get("/candidatures-reçues", authenticateToken, candidatureController.getCandidaturesByEmployer);
 
 module.exports = router;

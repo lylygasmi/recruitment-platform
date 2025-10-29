@@ -1,147 +1,105 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const pool = require("../config/db");
 const nodemailer = require("nodemailer");
+const User = require("../models/userModel");
+require("dotenv").config();
 
-const SECRET = process.env.JWT_SECRET || "mysecret";
-
-// ------------------ Transporteur mail ------------------ //
+// Transporter facultatif pour emails
 const transporter = nodemailer.createTransport({
-  service: "gmail", // ou autre SMTP
-  auth: {
-    user: process.env.EMAIL_USER, // ton email
-    pass: process.env.EMAIL_PASS, // mot de passe ou app password
-  },
+  service: "gmail",
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
 });
 
-// ------------------ Inscription ------------------ //
+// INSCRIPTION
 exports.register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
+    const [existingUser] = await User.findByEmail(email);
+    if (existingUser.length > 0) return res.status(400).json({ message: "Email déjà utilisé." });
 
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ message: "❌ Tous les champs obligatoires ne sont pas remplis" });
-    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    await User.create({ name, email, password: hashedPassword, role, verificationToken });
 
-    // Vérifier si email déjà utilisé
-    const [existing] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-    if (existing.length > 0) {
-      return res.status(400).json({ message: "❌ Email déjà utilisé" });
-    }
-
-    // Hasher le mot de passe
-    const hashedPassword = bcrypt.hashSync(password, 10);
-
-    // Générer token de vérification
-    const verificationToken = jwt.sign({ email }, SECRET, { expiresIn: "1d" });
-
-    // Insérer utilisateur avec isVerified = false
-    const [result] = await pool.query(
-      "INSERT INTO users (name, email, password, role, isVerified, verificationToken) VALUES (?, ?, ?, ?, ?, ?)",
-      [name, email, hashedPassword, role, false, verificationToken]
-    );
-
-    const verifyLink = `http://localhost:3000/confirm/${verificationToken}`;
-
-    // Envoi du mail
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Vérification de votre compte",
-      html: `
-        <h2>Bienvenue ${name} 🎉</h2>
-        <p>Merci de vous être inscrit sur notre plateforme.</p>
-        <p>Cliquez sur le bouton ci-dessous pour activer votre compte :</p>
-        <a href="${verifyLink}" 
-           style="display:inline-block;
-                  background:#00AEEF;
-                  color:#fff;
-                  padding:12px 20px;
-                  border-radius:6px;
-                  text-decoration:none;
-                  font-weight:bold;"
-        >Vérifier mon compte</a>
-        <p>Ou copiez-collez ce lien dans votre navigateur :</p>
-        <p>${verifyLink}</p>
-      `,
-    });
-
-    res.status(201).json({
-      message: "✅ Inscription réussie ! Vérifiez vos emails pour activer votre compte.",
-    });
-  } catch (err) {
-    console.error("❌ Erreur register :", err);
+    res.status(201).json({ message: "Utilisateur créé. Vérifiez votre email !" });
+  } catch (error) {
+    console.error("❌ Erreur register :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ------------------ Confirmation Email ------------------ //
+// CONFIRMATION EMAIL
 exports.confirmEmail = async (req, res) => {
   try {
     const { token } = req.params;
+    const [user] = await User.findByToken(token);
+    if (!user || user.length === 0) return res.status(400).json({ message: "Token invalide." });
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, SECRET);
-    } catch (err) {
-      return res.status(400).json({ message: "❌ Lien de vérification invalide ou expiré" });
-    }
-
-    const email = decoded.email;
-
-    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "❌ Utilisateur introuvable" });
-    }
-
-    const user = rows[0];
-
-    if (user.isVerified) {
-      return res.json({ message: "✅ Compte déjà vérifié. Vous pouvez vous connecter." });
-    }
-
-    await pool.query("UPDATE users SET isVerified = ?, verificationToken = NULL WHERE email = ?", [true, email]);
-
-    res.json({ message: "✅ Compte vérifié avec succès ! Vous pouvez maintenant vous connecter." });
-  } catch (err) {
-    console.error("❌ Erreur confirmEmail :", err);
+    await User.verifyUser(user[0].id);
+    res.status(200).json({ message: "Compte vérifié avec succès !" });
+  } catch (error) {
+    console.error("❌ Erreur confirmEmail :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ------------------ Connexion ------------------ //
+// CONNEXION
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: "❌ Email et mot de passe requis" });
-    }
-
-    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-    if (rows.length === 0) {
-      return res.status(401).json({ message: "❌ Utilisateur introuvable" });
-    }
+    const [rows] = await User.findByEmail(email);
+    if (rows.length === 0) return res.status(404).json({ message: "Utilisateur introuvable." });
 
     const user = rows[0];
+    if (!user.isVerified) return res.status(403).json({ message: "Veuillez vérifier votre email." });
 
-    if (!user.isVerified) {
-      return res.status(403).json({ message: "⚠️ Compte non vérifié. Vérifiez vos emails." });
-    }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Mot de passe incorrect." });
 
-    const isPasswordValid = bcrypt.compareSync(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: "❌ Mot de passe incorrect" });
-    }
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: "2h" });
+    res.json({ message: "Connexion réussie", token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (error) {
+    console.error("❌ Erreur login :", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
 
-    const token = jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: "7d" });
+// MOT DE PASSE OUBLIÉ
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const [userResult] = await User.findByEmail(email);
+    if (userResult.length === 0) return res.status(404).json({ message: "Utilisateur introuvable." });
 
-    res.json({
-      message: "✅ Connexion réussie",
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
-    });
-  } catch (err) {
-    console.error("❌ Erreur login :", err);
+    const user = userResult[0];
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetExpiry = new Date(Date.now() + 3600000); // 1h
+
+    await User.setResetToken(email, resetToken, resetExpiry);
+    res.json({ message: "Email de réinitialisation envoyé !" });
+  } catch (error) {
+    console.error("❌ Erreur forgotPassword :", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// RÉINITIALISER LE MOT DE PASSE
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    const [userResult] = await User.findByResetToken(token);
+    if (userResult.length === 0) return res.status(400).json({ message: "Lien invalide ou expiré." });
+
+    const user = userResult[0];
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await User.resetPassword(user.id, hashedPassword);
+
+    res.json({ message: "Mot de passe réinitialisé avec succès !" });
+  } catch (error) {
+    console.error("❌ Erreur resetPassword :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

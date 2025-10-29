@@ -1,42 +1,43 @@
 import React, { useState } from "react";
-import { Box, Button, Paper, TextField, Typography, Link as MuiLink } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Box, Button, Paper, TextField, Typography } from "@mui/material";
+import { useParams, useNavigate } from "react-router-dom";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import axios from "axios";
 
-export default function Login() {
-  const [email, setEmail] = useState("");
+export default function ResetPassword() {
+  const { token } = useParams();
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
+  const handleResetPassword = async (e) => {
     e.preventDefault();
+    setMessage("");
     setError("");
 
+    if (password !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas.");
+      return;
+    }
+
     try {
-      const response = await axios.post("http://localhost:5000/api/auth/login", {
-        email,
-        password,
-      });
-
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("role", response.data.user.role);
-
-      if (response.data.user.role === "candidat") {
-        navigate("/candidat/profile");
-      } else if (response.data.user.role === "employeur") {
-        navigate("/employeur/profile");
-      }
+      const response = await axios.post(
+        `http://localhost:5000/api/auth/reset-password/${token}`,
+        { password }
+      );
+      setMessage(response.data.message);
+      setTimeout(() => navigate("/login"), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || "Email ou mot de passe incorrect");
+      setError(err.response?.data?.message || "Erreur lors de la réinitialisation.");
     }
   };
 
   return (
     <Box sx={{ position: "relative", minHeight: "100vh" }}>
-      {/* 🔹 Carousel d’arrière-plan */}
+      {/* 🔹 Fond identique */}
       <Carousel
         autoPlay
         infiniteLoop
@@ -47,7 +48,6 @@ export default function Login() {
         swipeable
         emulateTouch
         stopOnHover={false}
-        dynamicHeight={false}
       >
         <div>
           <img
@@ -72,7 +72,7 @@ export default function Login() {
         </div>
       </Carousel>
 
-      {/* 🔹 Formulaire de connexion */}
+      {/* 🔹 Formulaire */}
       <Box
         display="flex"
         justifyContent="center"
@@ -91,8 +91,9 @@ export default function Login() {
             p: 5,
             borderRadius: "20px",
             width: "100%",
-            maxWidth: "450px",
-            bgcolor: "rgba(255,255,255,0.9)",
+            maxWidth: "500px",
+            bgcolor: "rgba(255,255,255,0.95)",
+            color: "#1c1e21",
           }}
         >
           <Typography
@@ -100,25 +101,21 @@ export default function Login() {
             mb={3}
             textAlign="center"
             fontWeight="bold"
-            color="#1877F2"
+            sx={{ color: "#1877F2" }}
           >
-            Connexion
+            Réinitialiser le mot de passe
           </Typography>
 
           {error && <Typography color="error" textAlign="center">{error}</Typography>}
+          {message && (
+            <Typography color="success.main" textAlign="center">
+              {message}
+            </Typography>
+          )}
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleResetPassword}>
             <TextField
-              label="Email"
-              type="email"
-              fullWidth
-              margin="normal"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <TextField
-              label="Mot de passe"
+              label="Nouveau mot de passe"
               type="password"
               fullWidth
               margin="normal"
@@ -126,22 +123,15 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-
-            {/* 🔹 Lien mot de passe oublié */}
-            <Box textAlign="right" mt={1}>
-              <MuiLink
-                component="button"
-                variant="body2"
-                onClick={() => navigate("/forgot-password")}
-                sx={{
-                  color: "#1877F2",
-                  textDecoration: "none",
-                  "&:hover": { textDecoration: "underline" },
-                }}
-              >
-                Mot de passe oublié ?
-              </MuiLink>
-            </Box>
+            <TextField
+              label="Confirmer le mot de passe"
+              type="password"
+              fullWidth
+              margin="normal"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
 
             <Button
               type="submit"
@@ -154,22 +144,12 @@ export default function Login() {
                 "&:hover": { bgcolor: "#166FE5" },
               }}
             >
-              Se connecter
+              Réinitialiser le mot de passe
             </Button>
-
-            <Typography mt={2} textAlign="center">
-              Pas encore de compte ?{" "}
-              <Button
-                variant="text"
-                onClick={() => navigate("/register")}
-                sx={{ color: "#1877F2", textTransform: "none" }}
-              >
-                S’inscrire
-              </Button>
-            </Typography>
           </form>
         </Paper>
       </Box>
     </Box>
   );
 }
+

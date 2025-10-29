@@ -16,12 +16,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
-    "express-fileupload": "^1.5.1",
+    "express-fileupload": "^1.5.2",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.11.0",
     "multer": "^1.4.5-lts.2",
     "mysql2": "^3.15.0",
     "nodemailer": "^7.0.6",
     "open": "^10.1.2",
+    "pdf-parse": "^1.1.1",
+    "python-shell": "^5.0.0",
     "sequelize": "^6.37.7"
   },
   "devDependencies": {

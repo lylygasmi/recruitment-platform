@@ -1,34 +1,61 @@
-const Employer = require("../models/employerModel");
-const Candidature = require("../models/offerlist");
+// backend/controllers/employerController.js
+const pool = require("../config/db");
 
-// --- OFFRES EMPLOYEUR ---
-exports.createJobOffer = async (req, res) => {
-  const { title, description, location } = req.body;
-  if(!req.employer || !req.employer.id) return res.status(401).json({ message:"Employeur non authentifié" });
+// 🔹 Voir toutes les offres publiées par l'employeur avec nombre de candidatures
+exports.getMyOffers = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "employeur") {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
 
-  await Employer.createJobOffer({ employer_id: req.employer.id, title, description, location });
-  res.json({ message: "Offre publiée avec succès" });
+    const [rows] = await pool.query(
+      `SELECT j.*, 
+              COUNT(c.id) AS total_candidatures
+       FROM job_offers j
+       LEFT JOIN candidatures c ON c.offer_id = j.id
+       WHERE j.employer_id = ?
+       GROUP BY j.id
+       ORDER BY j.created_at DESC`,
+      [req.user.id]
+    );
+
+    // Convertir technologies en tableau
+    const offers = rows.map(o => ({
+      ...o,
+      technologies: o.technologies ? o.technologies.split(",") : []
+    }));
+
+    res.json(offers);
+  } catch (err) {
+    console.error("Erreur getMyOffers:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
 };
 
-exports.updateJobOffer = async (req,res) => {
-  const { title, description, location } = req.body;
-  await Employer.updateJobOffer(req.params.id, { title, description, location });
-  res.json({ message: "Offre mise à jour" });
-};
+// 🔹 Voir toutes les candidatures reçues pour les offres de l'employeur
+exports.getReceivedCandidatures = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "employeur") {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
 
-exports.deleteJobOffer = async (req,res) => {
-  await Employer.deleteJobOffer(req.params.id);
-  res.json({ message: "Offre supprimée" });
-};
+    const [rows] = await pool.query(
+      `SELECT c.id, c.candidate_id, c.offer_id, c.cv_filename, c.status, 
+              j.title AS offer_title,
+              ca.nom AS candidate_nom,
+              ca.prenom AS candidate_prenom,
+              ca.email AS candidate_email
+       FROM candidatures c
+       JOIN job_offers j ON c.offer_id = j.id
+       JOIN candidates ca ON c.candidate_id = ca.id
+       WHERE j.employer_id = ?
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
 
-exports.getMyJobOffers = async (req,res) => {
-  if(!req.employer || !req.employer.id) return res.status(401).json({ message:"Employeur non authentifié" });
-  const [rows] = await Employer.getMyJobOffers(req.employer.id);
-  res.json(rows);
-};
-
-// --- CANDIDATURES REÇUES ---
-exports.getCandidaturesByOffer = async (req,res) => {
-  const [rows] = await Candidature.getByOffer(req.params.offer_id);
-  res.json(rows);
+    res.json(rows);
+  } catch (err) {
+    console.error("Erreur getReceivedCandidatures:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
 };

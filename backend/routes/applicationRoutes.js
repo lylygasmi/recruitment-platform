@@ -1,20 +1,17 @@
 const express = require("express");
 const router = express.Router();
 const applicationController = require("../controllers/applicationController");
+const authenticateCandidat = require("../middleware/authenticateCandidat");
+const authenticateEmployer = require("../middleware/authenticateEmployer");
 
-// ✅ Postuler à une offre
-router.post("/", applicationController.createApplication);
+// --- CANDIDAT ---
+router.post("/", authenticateCandidat, applicationController.createApplication);
+router.get("/candidate", authenticateCandidat, applicationController.getMyApplications);
+router.delete("/:id", authenticateCandidat, applicationController.deleteApplication);
 
-// ✅ Récupérer les candidatures d’un candidat
-router.get("/candidate/:candidate_id", applicationController.getApplicationsByCandidate);
-
-// ✅ Récupérer les candidatures d’une offre (employeur)
-router.get("/offer/:job_offer_id", applicationController.getApplicationsByOffer);
-
-// ✅ Mettre à jour le statut d’une candidature
-router.put("/:id/status", applicationController.updateApplicationStatus);
-
-// ✅ Supprimer une candidature
-router.delete("/:id", applicationController.deleteApplication);
+// --- EMPLOYEUR ---
+router.get("/offer/:job_offer_id", authenticateEmployer, applicationController.getApplicationsByOffer);
+router.get("/employer", authenticateEmployer, applicationController.getApplicationsByEmployer);
+router.put("/:id/status", authenticateEmployer, applicationController.updateApplicationStatus);
 
 module.exports = router;

@@ -2,13 +2,10 @@ const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
 
-// Inscription
 router.post("/register", authController.register);
-
-// Connexion
 router.post("/login", authController.login);
-
-// Confirmation email
 router.get("/confirm/:token", authController.confirmEmail);
+router.post("/forgot-password", authController.forgotPassword);
+router.post("/reset-password/:token", authController.resetPassword);
 
 module.exports = router;

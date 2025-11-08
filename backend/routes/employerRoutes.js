@@ -1,10 +1,11 @@
-// backend/routes/employerRoutes.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const authenticateToken = require("../middleware/authenticateEmployer");
-const candidatureController = require("../controllers/candidatureController");
+const employerController = require('../controllers/employerController');
 
-// 🔹 Voir toutes les candidatures reçues pour mes offres
-router.get("/candidatures-reçues", authenticateToken, candidatureController.getCandidaturesByEmployer);
+// ✅ Profil employeur
+router.get('/:id', employerController.getEmployerProfile);
+
+// ✅ Mettre à jour profil
+router.put('/:id', employerController.updateEmployerProfile);
 
 module.exports = router;

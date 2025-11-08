@@ -1,17 +1,17 @@
-const db = require("../db");
+const { DataTypes } = require('sequelize');
+const db = require('../config/db');
 
-const CV = {
-  create: ({ candidate_id, filename, filepath }) =>
-    db.promise().execute(
-      "INSERT INTO cvs (candidate_id, filename, filepath) VALUES (?, ?, ?)",
-      [candidate_id, filename, filepath]
-    ),
-
-  getByCandidate: (candidate_id) =>
-    db.promise().execute("SELECT * FROM cvs WHERE candidate_id = ?", [candidate_id]),
-
-  delete: (id, candidate_id) =>
-    db.promise().execute("DELETE FROM cvs WHERE id = ? AND candidate_id = ?", [id, candidate_id]),
-};
+const CV = db.define('cv', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  candidate_id: { type: DataTypes.INTEGER, allowNull: false },
+  offer_id: { type: DataTypes.INTEGER },
+  title: { type: DataTypes.STRING },
+  description: { type: DataTypes.TEXT },
+  file_path: { type: DataTypes.STRING },
+  filename: { type: DataTypes.STRING },
+  uploaded_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, {
+  timestamps: false
+});
 
 module.exports = CV;

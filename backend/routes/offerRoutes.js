@@ -1,17 +1,21 @@
-// backend/routes/offerRoutes.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const offerController = require("../controllers/offerController");
-const authenticateEmployer = require("../middleware/authenticateEmployer");
+const offerController = require('../controllers/offerController');
+const authenticateEmployer = require('../middleware/authenticateEmployer');
 
-// 🔹 Côté candidat (aucune authentification requise)
-router.get("/", offerController.getAllOffers);            // Voir toutes les offres
-router.get("/:id", offerController.getOfferById);        // Voir une offre par ID
+// ✅ Publier une offre
+router.post('/create', authenticateEmployer, offerController.createOffer);
 
-// 🔹 Côté employeur (authentification requise)
-router.get("/mes-offres", authenticateEmployer, offerController.getEmployerOffers); // Mes offres
-router.post("/create", authenticateEmployer, offerController.createOffer);           // Créer une offre
-router.put("/:id", authenticateEmployer, offerController.updateOffer);               // Mettre à jour une offre
-router.delete("/:id", authenticateEmployer, offerController.deleteOffer);            // Supprimer une offre
+// ✅ Voir toutes mes offres (employeur)
+router.get('/my', authenticateEmployer, offerController.getMyOffers);
+
+// ✅ Voir toutes les offres (candidat)
+router.get('/all', offerController.getAllOffers);
+
+// ✅ Mettre à jour une offre
+router.put('/update/:id', authenticateEmployer, offerController.updateOffer);
+
+// ✅ Supprimer une offre
+router.delete('/delete/:id', authenticateEmployer, offerController.deleteOffer);
 
 module.exports = router;

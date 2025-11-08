@@ -1,105 +1,278 @@
-const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
-const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
 const User = require("../models/userModel");
-require("dotenv").config();
+const crypto = require("crypto");
+const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer");
+const { Op } = require("sequelize");
 
-// Transporter facultatif pour emails
+// ============================
+// 📧 Nodemailer setup
+// ============================
 const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  service: "Gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-// INSCRIPTION
-exports.register = async (req, res) => {
+// ============================
+// 📨 Email de vérification avec logo et bouton
+// ============================
+const sendVerificationEmail = async (userEmail, token) => {
+  const verifyUrl = `${process.env.FRONTEND_URL}/verify-account/${token}`;
+
+  await transporter.sendMail({
+    from: '"HireMe" <hireme@example.com>',
+    to: userEmail,
+    subject: "✅ Vérifiez votre compte HireMe",
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height:1.6; color:#333;">
+        <!-- Logo en haut -->
+        <div style="text-align:center; margin-bottom:20px;">
+          <img src="cid:hiremeLogo" alt="HireMe Logo" width="120"/>
+        </div>
+
+        <h2 style="color:#1877F2;">Bienvenue sur HireMe !</h2>
+        <p>Bonjour,</p>
+        <p>Merci de vous être inscrit sur <strong>HireMe</strong>. Pour activer votre compte, cliquez sur le bouton ci-dessous :</p>
+
+        <!-- Bouton vérifier mon compte -->
+        <div style="text-align:center; margin:30px;">
+          <a href="${verifyUrl}" 
+             style="background-color:#1877F2; color:white; padding:15px 30px; text-decoration:none; border-radius:8px; font-weight:bold;">
+            Vérifier mon compte
+          </a>
+        </div>
+
+        <p style="font-size:12px; color:#666;">
+          Si le bouton ne fonctionne pas, copiez-collez ce lien dans votre navigateur :<br/>
+          <a href="${verifyUrl}" style="color:#1877F2;">${verifyUrl}</a>
+        </p>
+
+        <!-- Logo et copyright en bas -->
+        <div style="text-align:center; margin-top:40px;">
+          <img src="cid:hiremeLogo" alt="HireMe Logo" width="80"/>
+          <p style="font-size:12px; color:#666;">© 2025 HireMe. Tous droits réservés.</p>
+        </div>
+      </div>
+    `,
+    attachments: [
+      {
+        filename: 'logo.png',
+        path: __dirname + '/../logo.png', // chemin vers backend/logo.png
+        cid: 'hiremeLogo', // identifiant utilisé dans le HTML
+      },
+    ],
+  });
+};
+
+// ============================
+// 📝 Inscription sécurisée
+// ============================
+const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
-    const [existingUser] = await User.findByEmail(email);
-    if (existingUser.length > 0) return res.status(400).json({ message: "Email déjà utilisé." });
+    console.log("🚀 BODY reçu :", req.body);
+    const { name, email, password, role, phone } = req.body;
+
+    if (!name || !email || !password)
+      return res.status(400).json({ message: "Champs obligatoires manquants" });
+
+    const existingUser = await User.findOne({ where: { email } });
+
+    if (existingUser) {
+      if (!existingUser.isVerified) {
+        const verificationToken = crypto.randomBytes(32).toString("hex");
+        existingUser.name = name;
+        existingUser.role = role || existingUser.role;
+        existingUser.phone = phone || existingUser.phone;
+        existingUser.password = await bcrypt.hash(password, 10);
+        existingUser.verificationToken = verificationToken;
+        await existingUser.save();
+        console.log("📌 Compte existant non vérifié mis à jour");
+
+        await sendVerificationEmail(email, verificationToken);
+
+        return res.status(200).json({
+          message: "Compte existant non vérifié. Email de vérification renvoyé !",
+        });
+      } else {
+        return res.status(400).json({ message: "Email déjà utilisé" });
+      }
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationToken = crypto.randomBytes(32).toString("hex");
-    await User.create({ name, email, password: hashedPassword, role, verificationToken });
 
-    res.status(201).json({ message: "Utilisateur créé. Vérifiez votre email !" });
-  } catch (error) {
-    console.error("❌ Erreur register :", error);
-    res.status(500).json({ message: "Erreur serveur" });
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: role || "candidat",
+      phone: phone || null,
+      verificationToken,
+      isVerified: false,
+    });
+
+    console.log("✅ Nouvel utilisateur créé :", newUser.email);
+
+    await sendVerificationEmail(email, verificationToken);
+
+    res.status(201).json({ message: "Inscription réussie ! Vérifiez votre email." });
+  } catch (err) {
+    console.error("🔥 ERREUR REGISTER :", err);
+    res.status(500).json({ message: "Erreur serveur: " + err.message });
   }
 };
 
-// CONFIRMATION EMAIL
-exports.confirmEmail = async (req, res) => {
+// ============================
+// ✅ Vérification email
+// ============================
+const verifyAccount = async (req, res) => {
   try {
     const { token } = req.params;
-    const [user] = await User.findByToken(token);
-    if (!user || user.length === 0) return res.status(400).json({ message: "Token invalide." });
+    const user = await User.findOne({ where: { verificationToken: token } });
+    if (!user) return res.status(400).json({ message: "Token invalide ou expiré" });
 
-    await User.verifyUser(user[0].id);
-    res.status(200).json({ message: "Compte vérifié avec succès !" });
-  } catch (error) {
-    console.error("❌ Erreur confirmEmail :", error);
+    user.isVerified = true;
+    user.verificationToken = null;
+    await user.save();
+
+    res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
+  } catch (err) {
+    console.error("🔥 ERREUR VERIFY :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// CONNEXION
-exports.login = async (req, res) => {
+// ============================
+// 🔑 Login
+// ============================
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const [rows] = await User.findByEmail(email);
-    if (rows.length === 0) return res.status(404).json({ message: "Utilisateur introuvable." });
-
-    const user = rows[0];
-    if (!user.isVerified) return res.status(403).json({ message: "Veuillez vérifier votre email." });
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(400).json({ message: "Email ou mot de passe incorrect" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Mot de passe incorrect." });
+    if (!isMatch) return res.status(400).json({ message: "Email ou mot de passe incorrect" });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: "2h" });
-    res.json({ message: "Connexion réussie", token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
-  } catch (error) {
-    console.error("❌ Erreur login :", error);
+    if (!user.isVerified) return res.status(403).json({ message: "Compte non vérifié" });
+
+    res.status(200).json({ message: "Connexion réussie", user });
+  } catch (err) {
+    console.error("🔥 ERREUR LOGIN :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// MOT DE PASSE OUBLIÉ
-exports.forgotPassword = async (req, res) => {
+// ============================
+// 🔒 Mot de passe oublié
+// ============================
+const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const [userResult] = await User.findByEmail(email);
-    if (userResult.length === 0) return res.status(404).json({ message: "Utilisateur introuvable." });
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(400).json({ message: "Email inconnu" });
 
-    const user = userResult[0];
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetExpiry = new Date(Date.now() + 3600000); // 1h
+    const resetTokenExpiry = new Date(Date.now() + 3600 * 1000);
 
-    await User.setResetToken(email, resetToken, resetExpiry);
-    res.json({ message: "Email de réinitialisation envoyé !" });
-  } catch (error) {
-    console.error("❌ Erreur forgotPassword :", error);
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = resetTokenExpiry;
+    await user.save();
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    console.log("🔑 Reset link (test) :", resetUrl);
+
+    res.status(200).json({ message: "Email de réinitialisation envoyé" });
+  } catch (err) {
+    console.error("🔥 ERREUR FORGOT PASSWORD :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// RÉINITIALISER LE MOT DE PASSE
-exports.resetPassword = async (req, res) => {
+// ============================
+// 🔑 Reset password
+// ============================
+const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
-    const { password } = req.body;
+    const { newPassword } = req.body;
 
-    const [userResult] = await User.findByResetToken(token);
-    if (userResult.length === 0) return res.status(400).json({ message: "Lien invalide ou expiré." });
+    const user = await User.findOne({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: { [Op.gt]: new Date() },
+      },
+    });
+    if (!user) return res.status(400).json({ message: "Token invalide ou expiré" });
 
-    const user = userResult[0];
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await User.resetPassword(user.id, hashedPassword);
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.resetToken = null;
+    user.resetTokenExpiry = null;
+    await user.save();
 
-    res.json({ message: "Mot de passe réinitialisé avec succès !" });
-  } catch (error) {
-    console.error("❌ Erreur resetPassword :", error);
+    res.status(200).json({ message: "Mot de passe réinitialisé avec succès" });
+  } catch (err) {
+    console.error("🔥 ERREUR RESET PASSWORD :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
+};
+
+// ============================
+// 📱 OTP téléphone
+// ============================
+const sendOTP = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    const user = await User.findOne({ where: { phone } });
+    if (!user) return res.status(400).json({ message: "Numéro de téléphone inconnu" });
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    user.otpCode = otpCode;
+    user.otpExpiry = otpExpiry;
+    await user.save();
+
+    console.log(`OTP pour ${phone} : ${otpCode}`);
+    res.status(200).json({ message: "OTP envoyé" });
+  } catch (err) {
+    console.error("🔥 ERREUR SEND OTP :", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+const verifyOTP = async (req, res) => {
+  try {
+    const { phone, otpCode } = req.body;
+    const user = await User.findOne({ where: { phone } });
+    if (!user) return res.status(400).json({ message: "Numéro de téléphone inconnu" });
+
+    if (!user.otpCode || user.otpExpiry < new Date() || user.otpCode !== otpCode) {
+      return res.status(400).json({ message: "OTP invalide ou expiré" });
+    }
+
+    user.otpCode = null;
+    user.otpExpiry = null;
+    await user.save();
+
+    res.status(200).json({ message: "Téléphone vérifié avec succès" });
+  } catch (err) {
+    console.error("🔥 ERREUR VERIFY OTP :", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// ============================
+// ✅ Exports
+// ============================
+module.exports = {
+  register,
+  login,
+  verifyAccount,
+  forgotPassword,
+  resetPassword,
+  sendOTP,
+  verifyOTP,
 };

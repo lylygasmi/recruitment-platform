@@ -1,76 +1,100 @@
-const JobOffer = require("../models/jobOfferModel");
+const JobOffer = require('../models/jobOfferModel');
+const { Op } = require('sequelize');
 
-// Créer une offre (employeur)
+// ✅ Publier une offre (employeur)
 exports.createOffer = async (req, res) => {
   try {
-    const employer_id = req.user?.id;
-    const { title, description, location, contract_type, specialite, salary } = req.body;
-    if (!employer_id) return res.status(401).json({ message: "❌ Employeur non authentifié" });
-    await JobOffer.create({ employer_id, title, description, location, contract_type, specialite, salary });
-    res.status(201).json({ message: "✅ Offre créée avec succès" });
-  } catch (err) {
-    console.error("Erreur création offre :", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    if (!req.user || req.user.role !== 'employer') {
+      return res.status(403).json({ message: 'Non autorisé' });
+    }
+
+    const { title, description, location, contract_type, speciality, salary, currency, country, category, technologies } = req.body;
+
+    const offer = await JobOffer.create({
+      employer_id: req.user.id,
+      title,
+      description,
+      location,
+      contract_type,
+      speciality,
+      salary,
+      currency,
+      country,
+      category,
+      technologies,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+
+    res.status(201).json({ message: 'Offre publiée', offer });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la publication', error: error.message });
   }
 };
 
-// Voir toutes les offres d’un employeur
-exports.getEmployerOffers = async (req, res) => {
-  try {
-    const employer_id = req.user?.id;
-    const [rows] = await JobOffer.getByEmployer(employer_id);
-    res.json(rows);
-  } catch (err) {
-    console.error("Erreur getEmployerOffers :", err);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-};
-
-// Voir toutes les offres disponibles pour un candidat
+// ✅ Voir toutes les offres publiées (candidat)
 exports.getAllOffers = async (req, res) => {
   try {
-    const [rows] = await JobOffer.getAll();
-    res.json(rows);
-  } catch (err) {
-    console.error("Erreur getAllOffers :", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    const offers = await JobOffer.findAll();
+    res.json({ offers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la récupération', error: error.message });
   }
 };
 
-// Mettre à jour une offre
+// ✅ Voir mes offres (employeur)
+exports.getMyOffers = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'employer') {
+      return res.status(403).json({ message: 'Non autorisé' });
+    }
+
+    const offers = await JobOffer.findAll({
+      where: { employer_id: req.user.id }
+    });
+
+    res.json({ offers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la récupération', error: error.message });
+  }
+};
+
+// ✅ Mettre à jour une offre
 exports.updateOffer = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = req.body;
-    await JobOffer.update(id, data);
-    res.json({ message: "✅ Offre mise à jour avec succès" });
-  } catch (err) {
-    console.error("Erreur updateOffer :", err);
-    res.status(500).json({ message: "Erreur serveur" });
+
+    const offer = await JobOffer.findByPk(id);
+    if (!offer) return res.status(404).json({ message: 'Offre non trouvée' });
+    if (offer.employer_id !== req.user.id) return res.status(403).json({ message: 'Non autorisé' });
+
+    const updatedFields = req.body;
+    Object.assign(offer, updatedFields, { updated_at: new Date() });
+
+    await offer.save();
+    res.json({ message: 'Offre mise à jour', offer });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour', error: error.message });
   }
 };
 
-// Supprimer une offre
+// ✅ Supprimer une offre
 exports.deleteOffer = async (req, res) => {
   try {
     const { id } = req.params;
-    await JobOffer.delete(id);
-    res.json({ message: "✅ Offre supprimée avec succès" });
-  } catch (err) {
-    console.error("Erreur deleteOffer :", err);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-};
 
-// Voir une offre par ID
-exports.getOfferById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [rows] = await JobOffer.getById(id);
-    if (!rows.length) return res.status(404).json({ message: "Offre introuvable" });
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("Erreur getOfferById :", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    const offer = await JobOffer.findByPk(id);
+    if (!offer) return res.status(404).json({ message: 'Offre non trouvée' });
+    if (offer.employer_id !== req.user.id) return res.status(403).json({ message: 'Non autorisé' });
+
+    await offer.destroy();
+    res.json({ message: 'Offre supprimée' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la suppression', error: error.message });
   }
 };

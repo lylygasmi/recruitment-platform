@@ -1,82 +1,89 @@
-const Application = require("../models/applicationModel");
+const Application = require('../models/applicationModel');
+const JobOffer = require('../models/jobOfferModel');
+const Candidate = require('../models/candidateModel');
 
-// 🧠 Créer une candidature
+// ✅ Postuler à une offre
 exports.createApplication = async (req, res) => {
   try {
-    const candidat_id = req.user?.id;
-    const { offer_id } = req.body;
-    const cv_path = req.file ? req.file.path : null;
+    const { offer_id, cv_path, required_skills } = req.body;
 
-    if (!candidat_id) return res.status(401).json({ message: "Candidat non authentifié" });
-    if (!offer_id) return res.status(400).json({ message: "offer_id requis" });
+    if (!req.user || req.user.role !== 'candidat') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les candidats' });
+    }
 
-    await Application.create({ candidat_id, offer_id, cv_path });
-    res.status(201).json({ message: "Candidature envoyée avec succès" });
-  } catch (err) {
-    console.error("Erreur création candidature:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    const application = await Application.create({
+      candidate_id: req.user.id,
+      offer_id,
+      cv_path,
+      required_skills
+    });
+
+    res.status(201).json({ message: 'Candidature envoyée avec succès', application });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la création de la candidature', error: error.message });
   }
 };
 
-// 🔍 Récupérer les candidatures d’un candidat
-exports.getMyApplications = async (req, res) => {
+// ✅ Récupérer toutes les candidatures envoyées par le candidat connecté
+exports.getApplicationsByCandidate = async (req, res) => {
   try {
-    const candidat_id = req.user?.id;
-    const [rows] = await Application.getByCandidate(candidat_id);
-    res.json(rows);
-  } catch (err) {
-    console.error("Erreur getMyApplications:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    if (!req.user || req.user.role !== 'candidat') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les candidats' });
+    }
+
+    const applications = await Application.findAll({
+      where: { candidate_id: req.user.id },
+      include: [{ model: JobOffer }]
+    });
+
+    res.json(applications);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la récupération des candidatures', error: error.message });
   }
 };
 
-// ❌ Supprimer une candidature
-exports.deleteApplication = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const candidat_id = req.user?.id;
-    await Application.delete(id, candidat_id);
-    res.json({ message: "Candidature supprimée avec succès" });
-  } catch (err) {
-    console.error("Erreur deleteApplication:", err);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-};
-
-// 👩‍💼 Récupérer les candidatures d’un employeur
+// ✅ Récupérer toutes les candidatures reçues par les offres de l'employeur connecté
 exports.getApplicationsByEmployer = async (req, res) => {
   try {
-    const employer_id = req.user?.id;
-    const [rows] = await Application.getByEmployer(employer_id);
-    res.json(rows);
-  } catch (err) {
-    console.error("Erreur getApplicationsByEmployer:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    if (!req.user || req.user.role !== 'employeur') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les employeurs' });
+    }
+
+    const applications = await Application.findAll({
+      include: [
+        { model: JobOffer, where: { employer_id: req.user.id } },
+        { model: Candidate }
+      ]
+    });
+
+    res.json(applications);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la récupération des candidatures', error: error.message });
   }
 };
 
-// 📄 Récupérer les candidatures pour une offre donnée
-exports.getApplicationsByOffer = async (req, res) => {
-  try {
-    const { job_offer_id } = req.params;
-    const [rows] = await Application.getByOffer(job_offer_id);
-    res.json(rows);
-  } catch (err) {
-    console.error("Erreur getApplicationsByOffer:", err);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-};
-
-// 🔁 Mettre à jour le statut
+// ✅ Modifier le statut d'une candidature (acceptée / refusée)
 exports.updateApplicationStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    await Application.updateStatus(id, status);
-    res.json({ message: "Statut mis à jour avec succès" });
-  } catch (err) {
-    console.error("Erreur updateApplicationStatus:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+
+    if (!['en_attente', 'acceptée', 'refusée'].includes(status)) {
+      return res.status(400).json({ message: 'Statut invalide' });
+    }
+
+    const application = await Application.findByPk(id);
+    if (!application) return res.status(404).json({ message: 'Candidature non trouvée' });
+
+    application.status = status;
+    await application.save();
+
+    res.json({ message: 'Statut de la candidature mis à jour', application });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du statut', error: error.message });
   }
 };
-

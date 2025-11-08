@@ -1,66 +1,140 @@
-const db = require("../config/db"); // Assure-toi que c'est ta config MySQL
+const Application = require('../models/applicationModel');
+const JobOffer = require('../models/jobOfferModel');
+const Candidate = require('../models/candidateModel');
+const Employer = require('../models/employerModel');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
 
-// Postuler à une offre
-exports.postuler = async (req, res) => {
+// 📧 Configuration Nodemailer
+const transporter = nodemailer.createTransport({
+  service: 'Gmail',
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+});
+
+
+// ✅ 1️⃣ Postuler à une offre
+exports.createApplication = async (req, res) => {
   try {
-    const candidate_id = req.user.id; // id du candidat connecté
-    const { offer_id, cv_path } = req.body;
+    const { offer_id, cv_path, required_skills } = req.body;
 
-    if (!offer_id) return res.status(400).json({ message: "❌ offer_id requis" });
+    if (!req.user || req.user.role !== 'candidat') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les candidats' });
+    }
 
-    await db.query(
-      "INSERT INTO candidatures (candidate_id, offer_id, date_posted, cv_path, status) VALUES (?, ?, NOW(), ?, ?)",
-      [candidate_id, offer_id, cv_path || null, "En attente"]
-    );
+    const application = await Application.create({
+      candidate_id: req.user.id,
+      offer_id,
+      cv_path,
+      required_skills
+    });
 
-    res.status(201).json({ message: "✅ Candidature envoyée avec succès" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erreur serveur" });
+    // Envoi d’un email à l’employeur
+    const offer = await JobOffer.findByPk(offer_id);
+    const employer = await Employer.findByPk(offer.employer_id);
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: employer.email,
+      subject: 'Nouvelle candidature sur HireMe',
+      html: `<p>Bonjour ${employer.name},</p>
+             <p>Vous avez reçu une nouvelle candidature pour votre offre <strong>${offer.title}</strong>.</p>
+             <p>Connectez-vous à votre tableau de bord HireMe pour voir les détails.</p>`
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(201).json({ message: 'Candidature envoyée avec succès', application });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la création de la candidature', error: error.message });
   }
 };
 
-// Voir mes candidatures (candidat)
-exports.getMesCandidatures = async (req, res) => {
+
+
+// ✅ 2️⃣ Voir les candidatures d’un candidat connecté
+exports.getApplicationsByCandidate = async (req, res) => {
   try {
-    const candidate_id = req.user.id;
-    const [rows] = await db.query(
-      "SELECT c.*, j.title, j.company FROM candidatures c JOIN job_offers j ON c.offer_id = j.id WHERE c.candidate_id = ?",
-      [candidate_id]
-    );
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erreur serveur" });
+    if (!req.user || req.user.role !== 'candidat') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les candidats' });
+    }
+
+    const applications = await Application.findAll({
+      where: { candidate_id: req.user.id },
+      include: [{ model: JobOffer, as: 'offer' }]
+    });
+
+    res.status(200).json(applications);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la récupération des candidatures', error: error.message });
   }
 };
 
-// Voir les candidatures reçues pour mes offres (employeur)
-exports.getCandidaturesReçues = async (req, res) => {
+
+
+// ✅ 3️⃣ Voir les candidatures reçues par un employeur
+exports.getApplicationsByEmployer = async (req, res) => {
   try {
-    const employer_id = req.user.id;
+    if (!req.user || req.user.role !== 'employeur') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les employeurs' });
+    }
 
-    // On récupère les offres de l'employeur
-    const [offers] = await db.query(
-      "SELECT id FROM job_offers WHERE employer_id = ?",
-      [employer_id]
-    );
-    const offerIds = offers.map(o => o.id);
-    if (offerIds.length === 0) return res.json([]);
+    const offers = await JobOffer.findAll({
+      where: { employer_id: req.user.id },
+      include: [
+        {
+          model: Application,
+          as: 'applications',
+          include: [{ model: Candidate, as: 'candidate' }]
+        }
+      ]
+    });
 
-    // On récupère les candidatures pour ces offres
-    const [rows] = await db.query(
-      `SELECT c.*, j.title, j.company, u.name as candidate_name, u.email as candidate_email 
-       FROM candidatures c 
-       JOIN job_offers j ON c.offer_id = j.id
-       JOIN users u ON c.candidate_id = u.id
-       WHERE c.offer_id IN (?)`,
-      [offerIds]
-    );
+    res.status(200).json(offers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la récupération des candidatures reçues', error: error.message });
+  }
+};
 
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erreur serveur" });
+
+
+// ✅ 4️⃣ Mettre à jour le statut d’une candidature
+exports.updateApplicationStatus = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'employeur') {
+      return res.status(403).json({ message: 'Accès refusé : uniquement pour les employeurs' });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const application = await Application.findByPk(id);
+    if (!application) {
+      return res.status(404).json({ message: 'Candidature non trouvée' });
+    }
+
+    await application.update({ status });
+
+    // 📧 Notification par email au candidat
+    const candidate = await Candidate.findByPk(application.candidate_id);
+    const offer = await JobOffer.findByPk(application.offer_id);
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: candidate.email,
+      subject: `Mise à jour de votre candidature - ${offer.title}`,
+      html: `<p>Bonjour ${candidate.name},</p>
+             <p>Le statut de votre candidature pour l'offre <strong>${offer.title}</strong> a été mis à jour en : <strong>${status}</strong>.</p>
+             <p>Merci d’utiliser HireMe.</p>`
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ message: 'Statut mis à jour avec succès', application });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du statut', error: error.message });
   }
 };

@@ -5,7 +5,6 @@ import {
   Paper,
   TextField,
   Typography,
-  Link as MuiLink,
   MenuItem,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
@@ -18,33 +17,64 @@ export default function Register() {
     name: "",
     email: "",
     password: "",
+    confirmPassword: "",
     role: "candidat",
   });
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const navigate = useNavigate();
+
+  // Vérification de l'URL backend
+  console.log("Backend URL utilisée :", process.env.REACT_APP_BACKEND_URL);
+
+  const validatePassword = (password) => {
+    const minLength = /.{8,}/;
+    const upper = /[A-Z]/;
+    const lower = /[a-z]/;
+    const number = /[0-9]/;
+    return (
+      minLength.test(password) &&
+      upper.test(password) &&
+      lower.test(password) &&
+      number.test(password)
+    );
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
+    if (formData.password !== formData.confirmPassword) {
+      setError("❌ Les mots de passe ne correspondent pas.");
+      return;
+    }
+
+    if (!validatePassword(formData.password)) {
+      setError(
+        "Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre."
+      );
+      return;
+    }
+
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/auth/register",
-        formData
+        `${process.env.REACT_APP_BACKEND_URL}/api/auth/register`,
+        formData,
+        { headers: { "Content-Type": "application/json" } }
       );
 
       setSuccess(response.data.message);
-      setTimeout(() => navigate("/login"), 2000);
+      setTimeout(() => navigate("/login"), 3000);
     } catch (err) {
+      console.error("Erreur inscription :", err.response?.data);
       setError(err.response?.data?.message || "Erreur lors de l’inscription");
     }
   };
 
   return (
     <Box sx={{ position: "relative", minHeight: "100vh" }}>
-      {/* 🔹 Carousel d’arrière-plan */}
       <Carousel
         autoPlay
         infiniteLoop
@@ -80,7 +110,6 @@ export default function Register() {
         </div>
       </Carousel>
 
-      {/* 🔹 Formulaire d’inscription */}
       <Box
         display="flex"
         justifyContent="center"
@@ -114,12 +143,12 @@ export default function Register() {
           </Typography>
 
           {error && (
-            <Typography color="error" textAlign="center">
+            <Typography color="error" textAlign="center" sx={{ mb: 1 }}>
               {error}
             </Typography>
           )}
           {success && (
-            <Typography color="green" textAlign="center">
+            <Typography color="green" textAlign="center" sx={{ mb: 1 }}>
               {success}
             </Typography>
           )}
@@ -157,7 +186,17 @@ export default function Register() {
               }
               required
             />
-
+            <TextField
+              label="Confirmer le mot de passe"
+              type="password"
+              fullWidth
+              margin="normal"
+              value={formData.confirmPassword}
+              onChange={(e) =>
+                setFormData({ ...formData, confirmPassword: e.target.value })
+              }
+              required
+            />
             <TextField
               select
               label="Rôle"
@@ -170,6 +209,7 @@ export default function Register() {
             >
               <MenuItem value="candidat">Candidat</MenuItem>
               <MenuItem value="employeur">Employeur</MenuItem>
+              <MenuItem value="admin">Admin</MenuItem>
             </TextField>
 
             <Button

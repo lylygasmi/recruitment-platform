@@ -1,44 +1,70 @@
-const db = require("../config/db");
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/db"); // ta config Sequelize
 
-const User = {
-  create: async ({ name, email, password, role, verificationToken }) => {
-    const sql = `
-      INSERT INTO users (name, email, password, role, verificationToken, isVerified)
-      VALUES (?, ?, ?, ?, ?, false)
-    `;
-    return db.execute(sql, [name, email, password, role, verificationToken]);
+const User = sequelize.define(
+  "User",
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: {
+        isEmail: true,
+      },
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    role: {
+      type: DataTypes.ENUM("candidat", "employeur", "admin"),
+      allowNull: false,
+      defaultValue: "candidat",
+    },
+    isVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    verificationToken: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    resetToken: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    resetTokenExpiry: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    phone: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    otpCode: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    otpExpiry: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
-
-  findByEmail: async (email) => {
-    const sql = "SELECT * FROM users WHERE email=?";
-    return db.execute(sql, [email]);
-  },
-
-  findByToken: async (token) => {
-    const sql = "SELECT * FROM users WHERE verificationToken=?";
-    return db.execute(sql, [token]);
-  },
-
-  verifyUser: async (id) => {
-    const sql = "UPDATE users SET isVerified=true, verificationToken=NULL WHERE id=?";
-    return db.execute(sql, [id]);
-  },
-
-  setResetToken: async (email, token, expiry) => {
-    const sql = "UPDATE users SET resetToken=?, resetTokenExpiry=? WHERE email=?";
-    return db.execute(sql, [token, expiry, email]);
-  },
-
-  findByResetToken: async (token) => {
-    const sql = "SELECT * FROM users WHERE resetToken=? AND resetTokenExpiry > NOW()";
-    return db.execute(sql, [token]);
-  },
-
-  resetPassword: async (id, newPassword) => {
-    const sql = "UPDATE users SET password=?, resetToken=NULL, resetTokenExpiry=NULL WHERE id=?";
-    return db.execute(sql, [newPassword, id]);
+  {
+    timestamps: true,
+    tableName: "users",
+    createdAt: "createdAt",
+    updatedAt: "updatedAt",
   }
-};
+);
 
 module.exports = User;
-
